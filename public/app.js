@@ -9,36 +9,122 @@ document.addEventListener('DOMContentLoaded', () => {
     const windElement = document.getElementById('wind');
     const errorElement = document.getElementById('error');
 
-    // Ganti dengan API key Anda dari OpenWeatherMap
-    const apiKey = '5d66a1e45e1a4a2a8a9a9a9a9a9a9a9'; // Contoh API key (ganti dengan milik Anda)
+    // API 
+    const apiKey = '90ebc9dae79ec3f7ee5d33e505cd5dee'; 
 
     async function getWeatherByCity(city) {
         try {
-            // Sembunyikan pesan error sebelumnya
             errorElement.style.display = 'none';
             
-            // Encode nama kota untuk URL
-            const encodedCity = encodeURIComponent(city);
+            // Normalisasi input kota
+            const normalizedCity = city.trim()
+                .toLowerCase()
+                .replace(/\b\w/g, l => l.toUpperCase()); // Kapitalisasi setiap kata
+            
+            console.log(`Mencari cuaca untuk: ${normalizedCity}`);
+            
             const response = await fetch(
-                `https://api.openweathermap.org/data/2.5/weather?q=${encodedCity}&units=metric&appid=${apiKey}&lang=id`
+                `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(normalizedCity)}&units=metric&appid=${apiKey}&lang=id`
             );
             
-            // Jika response tidak OK, lempar error
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('Error dari API:', errorData);
+                
+                // Coba alternatif pencarian tanpa negara jika gagal
+                if (errorData.message.includes('not found')) {
+                    const cityOnly = normalizedCity.split(',')[0].trim();
+                    if (cityOnly !== normalizedCity) {
+                        console.log(`Mencoba tanpa kode negara: ${cityOnly}`);
+                        return getWeatherByCity(cityOnly);
+                    }
+                }
+                
                 throw new Error(errorData.message || 'Kota tidak ditemukan');
             }
             
             const data = await response.json();
+            console.log('Data diterima:', data);
+            
+            // Validasi data penting ada
+            if (!data.main || !data.weather || !data.weather[0]) {
+                throw new Error('Data cuaca tidak lengkap');
+            }
+            
             displayWeather(data);
         } catch (error) {
-            // Tampilkan pesan error yang lebih spesifik
-            errorElement.textContent = error.message.includes('404') ? 
-                'Kota tidak ditemukan' : 
-                'Gagal mengambil data cuaca. Coba lagi nanti.';
-            errorElement.style.display = 'block';
             console.error('Error:', error);
+            errorElement.textContent = getFriendlyErrorMessage(error.message);
+            errorElement.style.display = 'block';
         }
+    }
+
+    function getFriendlyErrorMessage(apiMessage) {
+        const messages = {
+            'city not found': 'Kota tidak ditemukan',
+            'nothing to geocode': 'Nama kota tidak valid',
+            'invalid API key': 'API key tidak valid',
+            '401': 'API key tidak valid atau expired',
+            '404': 'Kota tidak ditemukan',
+            '429': 'Terlalu banyak permintaan, coba lagi nanti'
+        };
+        
+        return messages[apiMessage.toLowerCase()] || 
+               messages[apiMessage] || 
+               'Gagal mengambil data cuaca. Coba kota lain atau coba lagi nanti.';
+    }
+
+    function displayWeather(data) {
+        const cityName = data.name || 'Lokasi tidak diketahui';
+        const country = data.sys?.country || '';
+        
+        locationElement.textContent = `${cityName}${country ? ', ' + country : ''}`;
+        tempElement.textContent = `${Math.round(data.main.temp)}°C`;
+        descriptionElement.textContent = data.weather[0].description;
+        humidityElement.textContent = data.main.humidity;
+        windElement.textContent = Math.round(data.wind.speed * 3.6); // m/s to km/h
+    }
+
+    // Event listeners tetap sama
+    searchBtn.addEventListener('click', () => {
+        const city = cityInput.value.trim();
+        if (city) {
+            getWeatherByCity(city);
+        } else {
+            showError('Silakan masukkan nama kota');
+        }
+    });
+
+    locationBtn.addEventListener('click', () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const { latitude, longitude } = position.coords;
+                    getWeatherByLocation(latitude, longitude);
+                },
+                error => {
+                    showError('Izin lokasi ditolak atau tidak tersedia');
+                }
+            );
+        } else {
+            showError('Geolocation tidak didukung di browser Anda');
+        }
+    });
+
+    cityInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const city = cityInput.value.trim();
+            if (city) {
+                getWeatherByCity(city);
+            } else {
+                showError('Silakan masukkan nama kota');
+            }
+        }
+    });
+
+    function showError(message) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
     }
 
     async function getWeatherByLocation(lat, lon) {
@@ -55,56 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             displayWeather(data);
         } catch (error) {
-            errorElement.textContent = error.message;
-            errorElement.style.display = 'block';
+            showError(error.message);
         }
     }
-
-    function displayWeather(data) {
-        locationElement.textContent = `${data.name}, ${data.sys.country}`;
-        tempElement.textContent = `${Math.round(data.main.temp)}°C`;
-        descriptionElement.textContent = data.weather[0].description;
-        humidityElement.textContent = data.main.humidity;
-        windElement.textContent = Math.round(data.wind.speed * 3.6); // Convert m/s to km/h
-    }
-
-    searchBtn.addEventListener('click', () => {
-        const city = cityInput.value.trim();
-        if (city) {
-            getWeatherByCity(city);
-        } else {
-            errorElement.textContent = 'Silakan masukkan nama kota';
-            errorElement.style.display = 'block';
-        }
-    });
-
-    locationBtn.addEventListener('click', () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                position => {
-                    const { latitude, longitude } = position.coords;
-                    getWeatherByLocation(latitude, longitude);
-                },
-                error => {
-                    errorElement.textContent = 'Izin lokasi ditolak atau tidak tersedia';
-                    errorElement.style.display = 'block';
-                }
-            );
-        } else {
-            errorElement.textContent = 'Geolocation tidak didukung di browser Anda';
-            errorElement.style.display = 'block';
-        }
-    });
-
-    cityInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            const city = cityInput.value.trim();
-            if (city) {
-                getWeatherByCity(city);
-            } else {
-                errorElement.textContent = 'Silakan masukkan nama kota';
-                errorElement.style.display = 'block';
-            }
-        }
-    });
 });
