@@ -9,49 +9,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const windElement = document.getElementById('wind');
     const errorElement = document.getElementById('error');
 
-    const apiKey = '90ebc9dae79ec3f7ee5d33e505cd5dee'; 
+    // Ganti dengan API key Anda dari OpenWeatherMap
+    const apiKey = '5d66a1e45e1a4a2a8a9a9a9a9a9a9a9'; // Contoh API key (ganti dengan milik Anda)
 
-    // Fungsi untuk mendapatkan cuaca berdasarkan kota
     async function getWeatherByCity(city) {
         try {
+            // Sembunyikan pesan error sebelumnya
+            errorElement.style.display = 'none';
+            
+            // Encode nama kota untuk URL
+            const encodedCity = encodeURIComponent(city);
             const response = await fetch(
-                `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${apiKey}&lang=id`
+                `https://api.openweathermap.org/data/2.5/weather?q=${encodedCity}&units=metric&appid=${apiKey}&lang=id`
             );
             
+            // Jika response tidak OK, lempar error
             if (!response.ok) {
-                throw new Error('Kota tidak ditemukan');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Kota tidak ditemukan');
             }
             
             const data = await response.json();
             displayWeather(data);
-            errorElement.style.display = 'none';
         } catch (error) {
-            errorElement.textContent = error.message;
+            // Tampilkan pesan error yang lebih spesifik
+            errorElement.textContent = error.message.includes('404') ? 
+                'Kota tidak ditemukan' : 
+                'Gagal mengambil data cuaca. Coba lagi nanti.';
             errorElement.style.display = 'block';
+            console.error('Error:', error);
         }
     }
 
-    // Fungsi untuk mendapatkan cuaca berdasarkan lokasi
     async function getWeatherByLocation(lat, lon) {
         try {
+            errorElement.style.display = 'none';
             const response = await fetch(
                 `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}&lang=id`
             );
             
             if (!response.ok) {
-                throw new Error('Gagal mendapatkan data cuaca');
+                throw new Error('Gagal mendapatkan data cuaca untuk lokasi Anda');
             }
             
             const data = await response.json();
             displayWeather(data);
-            errorElement.style.display = 'none';
         } catch (error) {
             errorElement.textContent = error.message;
             errorElement.style.display = 'block';
         }
     }
 
-    // Fungsi untuk menampilkan data cuaca
     function displayWeather(data) {
         locationElement.textContent = `${data.name}, ${data.sys.country}`;
         tempElement.textContent = `${Math.round(data.main.temp)}°C`;
@@ -60,15 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
         windElement.textContent = Math.round(data.wind.speed * 3.6); // Convert m/s to km/h
     }
 
-    // Event listener untuk tombol cari
     searchBtn.addEventListener('click', () => {
         const city = cityInput.value.trim();
         if (city) {
             getWeatherByCity(city);
+        } else {
+            errorElement.textContent = 'Silakan masukkan nama kota';
+            errorElement.style.display = 'block';
         }
     });
 
-    // Event listener untuk tombol lokasi
     locationBtn.addEventListener('click', () => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -87,12 +96,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Memungkinkan pencarian dengan menekan Enter
     cityInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             const city = cityInput.value.trim();
             if (city) {
                 getWeatherByCity(city);
+            } else {
+                errorElement.textContent = 'Silakan masukkan nama kota';
+                errorElement.style.display = 'block';
             }
         }
     });
